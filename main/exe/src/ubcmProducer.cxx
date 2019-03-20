@@ -41,20 +41,41 @@ class ubcmProducer : public eudaq::Producer {
         // Do any initialisation of the ubcm here 
         // "start-up configuration", which is usally done only once in the beginning
         // Configuration file values are accessible as config.Get(name, default)
-        _init_parameter = init.Get("init_parameter", 0);
+        _init_ubcmswDir   = init.Get("init_ubcmswDir", "/afs/cern.ch/user/z/zichen/public/BRIL/ubcm/sw");
+        _init_fwDeployPy  = init.Get("init_fwDeployPy", "/scripts/deploy_fw.py");
+        _init_fwDeployOpt = init.Get("init_fwDeployOpt", "-f");
+        _init_fwDeployTgt = init.Get("init_fwDeployTgt", "lab.amc3");
+        _init_fwDeployMcs = init.Get("init_fwDeployMcs", "../fw/fpga/build/bcm1f/bcm1f_0_14_154.mcs");
+        _init_fwDeploySlotNumber = init.Get("init_fwDeploySlotNumber", "3");
+
         // Message as cout in the terminal of your producer
-        std::cout << "Initialise with parameter = " << _init_parameter << std::endl;
+        std::cout << "Initialise with init_ubcmswDir = " << _init_ubcmswDir << std::endl;
+        std::cout << "Initialise with init_fwDeployPy = " << _init_fwDeployPy << std::endl;
+        std::cout << "Initialise with init_fwDeployOpt = " << _init_fwDeployOpt << std::endl;
+        std::cout << "Initialise with init_fwDeployTgt = " << _init_fwDeployTgt << std::endl;
+        std::cout << "Initialise with init_fwDeployMcs = " << _init_fwDeployMcs << std::endl;
+        std::cout << "Initialise with init_fwDeploySlotNumber = " << _init_fwDeploySlotNumber << std::endl;
         // ---------- init your ubcm here ----------
+        system("whoiam");
 
+        std::string str_command = "python ";
+        str_command += _init_ubcmswDir + _init_fwDeployPy + " ";
+        str_command += _init_fwDeployOpt + " ";
+        str_command += _init_fwDeployTgt + " ";
+        str_command += _init_fwDeployMcs + " ";
+        str_command += _init_fwDeploySlotNumber;
 
+        const char *command = str_command.c_str(); 
+        system(command);
 
-
-
-
-        
         // send information
         // or to the LogCollector, depending which log level you want. These are the possibilities just as an ubcm here:
-        EUDAQ_INFO("Initialise with parameter = " + std::to_string(_init_parameter));
+        EUDAQ_INFO("Initialise with init_ubcmswDir = " + _init_ubcmswDir);
+        EUDAQ_INFO("Initialise with init_fwDeployPy = " + _init_fwDeployPy);
+        EUDAQ_INFO("Initialise with init_fwDeployOpt = " + _init_fwDeployOpt);
+        EUDAQ_INFO("Initialise with init_fwDeployTgt = " + _init_fwDeployTgt);
+        EUDAQ_INFO("Initialise with init_fwDeployMcs = " + _init_fwDeployMcs);
+        EUDAQ_INFO("Initialise with init_fwDeploySlotNumber = " + _init_fwDeploySlotNumber);
 
         // At the end, set the ConnectionState that will be displayed in the Run Control.
         // and set the state of the machine.
@@ -97,14 +118,14 @@ class ubcmProducer : public eudaq::Producer {
           std::cerr << "No valid targets specified." << std::endl;
         } 
         
-        // loop over crag
+        // loop over crate
         for ( auto cr : targetsNames ) {
           std::cout << "Connecting to MCH " << cr.first << std::endl;
           // loop over amc boards
           for ( utca::amc_t amc : cr.second ) {
             std::cout << "Connecting to slot " << amc.slot << std::endl;
 
-            // config ubcm on each amc boards in each crag
+            // config ubcm on each amc boards in each crate
             utca::uBCM* this_ubcm;
             try {
               auto* ipmi = new utca::ipmi( ipmi_connection_manager, cr.first, amc.slot );
@@ -261,8 +282,13 @@ class ubcmProducer : public eudaq::Producer {
               std::cerr << "Trg#, " << raw->external_trigger_counter << ", TLU#, " << raw->external_trigger_data << '\n';
           
               for (unsigned ichannel = 0; ichannel < 4; ++ichannel) {
-                std::vector<unsigned char> buffer = {0,1,2,3,4,5,6,7,7,8,9};
-                // std::vector<unsigned char> buffer = raw->data[ichannel].data();
+                auto buffer = raw->data[ichannel];
+                // auto buffer = raw->data[ichannel].data();
+                // std::vector<unsigned char> buffer = {0,1,2,3,4,5,6,7,7,8,9};
+                // std::vector<unsigned char> buffer;
+                // for ( char x: raw->data[i] ){
+                //   buffer.push_back(x);
+                // }
                 ev.AddBlock(4*itarget+ichannel, buffer);
               }
             }
@@ -290,7 +316,12 @@ class ubcmProducer : public eudaq::Producer {
     bool _stopping, _done;
 
     // ---------- init paramters ----------
-    unsigned _init_parameter;
+    std::string _init_ubcmswDir;
+    std::string _init_fwDeployPy;
+    std::string _init_fwDeployOpt;
+    std::string _init_fwDeployTgt;
+    std::string _init_fwDeployMcs;
+    std::string _init_fwDeploySlotNumber;
 
     // ---------- conf paramters ----------
     int _conf_maxNumberOfEvents;
