@@ -185,33 +185,33 @@ class ubcmProducer : public eudaq::Producer {
             // Then restart the loop
             continue;
           }
-          // If we get here, there must be data to read out
-          // Create a RawDataEvent to contain the event data to be sent
-          eudaq::RawDataEvent ev(EVENT_TYPE, m_run, m_ev);
-          for (unsigned plane = 0; plane < hardware.NumSensors(); ++plane) {
-            // Read out a block of raw data from the hardware
-            std::vector<unsigned char> buffer = hardware.ReadSensor(plane);
-            // Each data block has an ID that is used for ordering the planes later
-            // If there are multiple sensors, they should be numbered incrementally
-
-            // Add the block of raw data to the event
-            ev.AddBlock(plane, buffer);
-          }
-          hardware.CompletedEvent();
-
-
           // // If we get here, there must be data to read out
           // // Create a RawDataEvent to contain the event data to be sent
           // eudaq::RawDataEvent ev(EVENT_TYPE, m_run, m_ev);
-          // for (unsigned ichannel = 0; ichannel < 4; ++ichannel) {
+          // for (unsigned plane = 0; plane < hardware.NumSensors(); ++plane) {
           //   // Read out a block of raw data from the hardware
-          //   std::vector<unsigned char> buffer = {0.,1.,2,3.,4.,5.,6.,7.,8.,9.};
+          //   std::vector<unsigned char> buffer = hardware.ReadSensor(plane);
           //   // Each data block has an ID that is used for ordering the planes later
           //   // If there are multiple sensors, they should be numbered incrementally
 
           //   // Add the block of raw data to the event
-          //   ev.AddBlock(ichannel, buffer);
+          //   ev.AddBlock(plane, buffer);
           // }
+
+          // If we get here, there must be data to read out
+          // Create a RawDataEvent to contain the event data to be sent
+          eudaq::RawDataEvent ev(EVENT_TYPE, m_run, m_ev);
+          for (unsigned ichannel = 0; ichannel < 4; ++ichannel) {
+            // Read out a block of raw data from the hardware
+            std::vector<unsigned char> buffer = {0,1,2,3,4,5,6,7,8,9};
+            // Each data block has an ID that is used for ordering the planes later
+            // If there are multiple sensors, they should be numbered incrementally
+
+            // Add the block of raw data to the event
+            ev.AddBlock(ichannel, buffer);
+          }
+
+          hardware.CompletedEvent();
 
           // Send the event to the Data Collector      
           SendEvent(ev);
