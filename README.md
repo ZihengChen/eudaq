@@ -1,8 +1,6 @@
 EUDAQ version 1.9.1 for uBCM
 =======
 
-[![Build Status](https://travis-ci.org/eudaq/eudaq.svg?branch=v1.x-dev)](https://travis-ci.org/eudaq/eudaq) 
-[![Build status](https://ci.appveyor.com/api/projects/status/n3tq45kkupyvjihg/branch/v1.x-dev?svg=true)](https://ci.appveyor.com/project/eudaq/eudaq/branch/v1.x-dev)
 
 **Note: EUDAQ version 1.10 requires a C++14 compliant compiler.**
 
