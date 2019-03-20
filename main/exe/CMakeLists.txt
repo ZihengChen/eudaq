@@ -1,4 +1,3 @@
-
 add_executable(ClusterExtractor.exe     src/ClusterExtractor.cxx  )
 add_executable(Converter.exe            src/Converter.cxx         )
 add_executable(ExampleProducer.exe      src/ExampleProducer.cxx   )
@@ -15,9 +14,6 @@ add_executable(TestMonitor.exe          src/TestMonitor.cxx       )
 add_executable(TestProducer.exe         src/TestProducer.cxx      )
 add_executable(TestReader.exe           src/TestReader.cxx        )
 add_executable(TestRunControl.exe       src/TestRunControl.cxx    )
-add_executable(ubcmProducer.exe         src/ubcmProducer.cxx    )
-
-# target_link_libraries(ubcmProducer.exe  /afs/cern.ch/user/z/zichen/public/BRIL/ubcm/sw/lib/libubcm.so)
 
 # ${ADDITIONAL_LIBRARIES} is only set if e.g. the native reader processor is built (EUTelescope/LCIO)
 target_link_libraries(ClusterExtractor.exe   EUDAQ ${ADDITIONAL_LIBRARIES})
@@ -36,10 +32,28 @@ target_link_libraries(TestMonitor.exe        EUDAQ ${ADDITIONAL_LIBRARIES})
 target_link_libraries(TestProducer.exe       EUDAQ ${ADDITIONAL_LIBRARIES})
 target_link_libraries(TestReader.exe         EUDAQ ${ADDITIONAL_LIBRARIES})
 target_link_libraries(TestRunControl.exe     EUDAQ ${ADDITIONAL_LIBRARIES})
-target_link_libraries(ubcmProducer.exe       EUDAQ ${ADDITIONAL_LIBRARIES})
+
+# add user include directory for ubcmProducer
+INCLUDE_DIRECTORIES(/afs/cern.ch/user/z/zichen/public/BRIL/ubcm/sw/include)
+INCLUDE_DIRECTORIES(/opt/cactus/include)
+INCLUDE_DIRECTORIES(/usr/include/root)
+# add user lib directory for ubcmProducer
+LINK_DIRECTORIES(/afs/cern.ch/user/z/zichen/public/BRIL/ubcm/sw/lib)
+LINK_DIRECTORIES(/opt/cactus/lib)
+LINK_DIRECTORIES(/usr/lib64/root)
+LINK_DIRECTORIES(/usr/lib64)
+# compile ubcmProducer
+add_executable(ubcmProducer.exe src/ubcmProducer.cxx)
+# link against user lib
+target_link_libraries(ubcmProducer.exe EUDAQ ${ADDITIONAL_LIBRARIES} ubcm pthread ncurses boost_filesystem boost_regex boost_system boost_thread pugixml cactus_uhal_log cactus_uhal_grammars cactus_uhal_uhal)
+
+
 
 INSTALL(TARGETS ubcmProducer.exe ClusterExtractor.exe Converter.exe ExampleProducer.exe ExampleSlowProducer.exe ExampleReader.exe FileChecker.exe IPHCConverter.exe MagicLogBook.exe OptionExample.exe RunListener.exe euDataCollector.exe TestLogCollector.exe TestMonitor.exe TestProducer.exe TestReader.exe TestRunControl.exe
   EXPORT ${PROJECT_NAME}
   RUNTIME DESTINATION bin COMPONENT MAIN_EXE
   LIBRARY DESTINATION lib COMPONENT MAIN_EXE
   ARCHIVE DESTINATION lib COMPONENT MAIN_EXE)
+  
+
+
