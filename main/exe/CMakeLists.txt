@@ -33,6 +33,7 @@ target_link_libraries(TestProducer.exe       EUDAQ ${ADDITIONAL_LIBRARIES})
 target_link_libraries(TestReader.exe         EUDAQ ${ADDITIONAL_LIBRARIES})
 target_link_libraries(TestRunControl.exe     EUDAQ ${ADDITIONAL_LIBRARIES})
 
+############################# ubcm Producer ##############################
 # add user include directory for ubcmProducer
 INCLUDE_DIRECTORIES(/afs/cern.ch/user/z/zichen/public/BRIL/ubcm/sw/include)
 INCLUDE_DIRECTORIES(/opt/cactus/include)
@@ -46,7 +47,7 @@ LINK_DIRECTORIES(/usr/lib64)
 add_executable(ubcmProducer.exe src/ubcmProducer.cxx)
 # link against user lib
 target_link_libraries(ubcmProducer.exe EUDAQ ${ADDITIONAL_LIBRARIES} ubcm pthread ncurses boost_filesystem boost_regex boost_system boost_thread pugixml cactus_uhal_log cactus_uhal_grammars cactus_uhal_uhal)
-
+##########################################################################
 
 
 INSTALL(TARGETS ubcmProducer.exe ClusterExtractor.exe Converter.exe ExampleProducer.exe ExampleSlowProducer.exe ExampleReader.exe FileChecker.exe IPHCConverter.exe MagicLogBook.exe OptionExample.exe RunListener.exe euDataCollector.exe TestLogCollector.exe TestMonitor.exe TestProducer.exe TestReader.exe TestRunControl.exe

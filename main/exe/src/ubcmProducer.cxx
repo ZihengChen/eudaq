@@ -12,7 +12,12 @@
 
 #include "eudaq/Status.hh"
 
+// ubcm include
 #include "ubcm.hpp"
+#include "cratemaps.hpp"
+#include "uhal/ConnectionManager.hpp"
+#include <pugixml.hpp>
+
 
 // A name to identify the raw data format of the events generated
 // Modify this to something appropriate for your producer.
@@ -26,35 +31,30 @@ class ubcmProducer : public eudaq::Producer {
     // and the runcontrol connection string, and initialize any member variables.
     ubcmProducer(const std::string & name, const std::string & runcontrol)
       : eudaq::Producer(name, runcontrol),
-      m_run(0), m_ev(0), stopping(false), done(false) {}
+      _n_run(0), _n_ev(0), _stopping(false), _done(false) {}
 
     // This gets called whenever the DAQ is initialised
     virtual void OnInitialise(const eudaq::Configuration & init) {
       try {
         std::cout << "Reading: " << init.Name() << std::endl;
         
-        // Do any initialisation of the hardware here 
+        // Do any initialisation of the ubcm here 
         // "start-up configuration", which is usally done only once in the beginning
         // Configuration file values are accessible as config.Get(name, default)
-        m_ubcmInitParam = init.Get("InitParameter", 0);
+        _init_parameter = init.Get("init_parameter", 0);
+        // Message as cout in the terminal of your producer
+        std::cout << "Initialise with parameter = " << _init_parameter << std::endl;
+        // ---------- init your ubcm here ----------
+
+
+
+
+
+
         
         // send information
-        // Message as cout in the terminal of your producer
-        std::cout << "Initialise with parameter = " << m_ubcmInitParam << std::endl;
         // or to the LogCollector, depending which log level you want. These are the possibilities just as an ubcm here:
-        EUDAQ_INFO("Initialise with parameter = " + std::to_string(m_ubcmInitParam));
-        //EUDAQ_DEBUG("Debug Message to the LogCollector from ubcmProducer");
-        //EUDAQ_EXTRA("Extra Message to the LogCollector from ubcmProducer");
-        //EUDAQ_INFO("Info Message to the LogCollector from ubcmProducer");
-        //EUDAQ_WARN("Warn Message to the LogCollector from ubcmProducer");
-        //EUDAQ_ERROR("Error Message to the LogCollector from ubcmProducer");
-        //EUDAQ_USER("User Message to the LogCollector from ubcmProducer");
-
-        // EUDAQ_THROW throws an error, thus here goes to catch! With that you can simulate errors...
-        //EUDAQ_THROW("User Message to the LogCollector from ubcmProducer");
-
-        // send it to your hardware
-        hardware.Setup(m_ubcmInitParam);
+        EUDAQ_INFO("Initialise with parameter = " + std::to_string(_init_parameter));
 
         // At the end, set the ConnectionState that will be displayed in the Run Control.
         // and set the state of the machine.
@@ -75,19 +75,84 @@ class ubcmProducer : public eudaq::Producer {
       try {
         std::cout << "Reading: " << config.Name() << std::endl;
 
-        // Do any configuration of the hardware here
+        // Do any configuration of the ubcm here
         // Configuration file values are accessible as config.Get(name, default)
-        m_ubcmConfParam = config.Get("ConfParameter", 0);
-        hardware.Setup(m_ubcmConfParam);
-        
+        _conf_targetString = config.Get("conf_targetString", "bcm1f.crate2.amc3");
+        _conf_connectionsRARP = config.Get("conf_connectionsRARP", "/afs/cern.ch/user/z/zichen/public/BRIL/ubcm/sw/cfg/connections_rarp.xml");
+        _conf_maxNumberOfEvents = config.Get("conf_maxNumberOfEvents", 100); // for testing purpose only
         // Message as cout in the terminal of your producer
-        std::cout << "ubcm Configuration Parameter = " << m_ubcmConfParam << std::endl;
+        std::cout << "ubcm conf_targetString = " << _conf_targetString << std::endl;
+        std::cout << "ubcm conf_connectionsRARP = " << _conf_connectionsRARP << std::endl;
+        std::cout << "ubcm conf_maxNumberOfEvents = " << _conf_maxNumberOfEvents << std::endl;
+
+
+        // ---------- config your ubcm here ----------
+        auto ipmi_connection_manager = std::make_shared<utca::ipmi_base>();
+        uhal::setLogLevelTo( uhal::Warning() );
+        uhal::ConnectionManager connection_manager( "file://"+_conf_connectionsRARP);
+
+        // connect to all ubcm boards
+        auto targetsNames = utca::load_connections( _conf_connectionsRARP, _conf_targetString);
+        if ( targetsNames.empty() ){
+          std::cerr << "No valid targets specified." << std::endl;
+        } 
+        
+        // loop over crag
+        for ( auto cr : targetsNames ) {
+          std::cout << "Connecting to MCH " << cr.first << std::endl;
+          // loop over amc boards
+          for ( utca::amc_t amc : cr.second ) {
+            std::cout << "Connecting to slot " << amc.slot << std::endl;
+
+            // config ubcm on each amc boards in each crag
+            utca::uBCM* this_ubcm;
+            try {
+              auto* ipmi = new utca::ipmi( ipmi_connection_manager, cr.first, amc.slot );
+              this_ubcm = new utca::uBCM( *ipmi, connection_manager.getDevice( amc.ipbus_id ) );
+
+              this_ubcm->init( utca::fw_BCM1F_FMC125, utca::quad_30spbx, 270 );
+              this_ubcm->adc_bit_align();
+              this_ubcm->adc_test_ramp();
+                
+              utca::GLIBv3::thresholds_t t{ 130, 130, 130, 130 };
+              this_ubcm->configure_histograms( t, utca::GLIBv3::thresholds_t{ 1, 1, 1, 1 }, 4 );
+              // this_ubcm->configure_raw_data( false, t );
+              utca::GLIBv3::thresholds_t dt{ 18, 18, 18, 18 };
+              utca::GLIBv3::thresholds_t to{ 2, 2, 2, 2 };
+              utca::GLIBv3::thresholds_t at{ 12, 12, 12, 12 };
+              this_ubcm->configure_peak_finder( dt, to, at );
+              this_ubcm->m_carrier->configure_raw_data( utca::GLIBv3::trg_orbit );
+              this_ubcm->m_carrier->configure_tlu_if( false, false );
+
+            } catch ( std::exception& e ) {
+              std::cerr << e.what() << std::endl;
+              continue;
+            }
+
+            // check condition of ubcm on each amc boards in each crag
+            std::string this_ubcm_is_ok = this_ubcm->check_system();
+            std::cerr << "Check configuration: " << ( this_ubcm_is_ok.empty() ? "ubcm is OK." : this_ubcm_is_ok.c_str() ) << std::endl;
+          
+            // save this ubcm
+            _targets.push_back(this_ubcm);
+          }
+        }
+
+
+
+
+
         // Message to the LogCollector
-        EUDAQ_INFO("Configuring with parameter = " + std::to_string(m_ubcmConfParam));
+        EUDAQ_INFO("Configuring conf_targetString = " + _conf_targetString);
+        EUDAQ_INFO("Configuring conf_connectionsRARP = " + _conf_connectionsRARP);
+        EUDAQ_INFO("Configuring conf_maxNumberOfEvents = " + _conf_maxNumberOfEvents);
+
+        
 
         // At the end, set the ConnectionState that will be displayed in the Run Control.
         // and set the state of the machine.
         SetConnectionState(eudaq::ConnectionState::STATE_CONF, "Configured (" + config.Name() + ")");
+        
       } 
       catch (...) {
         // Otherwise, the State is set to ERROR
@@ -102,18 +167,28 @@ class ubcmProducer : public eudaq::Producer {
     virtual void OnStartRun(unsigned param) {
       try {
 
-        m_run = param;
-        m_ev = 0;
+        _n_run = param;
+        _n_ev = 0;
       
-        std::cout << "Start Run: " << m_run << std::endl;
+        std::cout << "Start Run: " << _n_run << std::endl;
 
         // It must send a BORE (Begin-Of-Run Event) to the Data Collector
-        eudaq::RawDataEvent bore(eudaq::RawDataEvent::BORE(EVENT_TYPE, m_run));
+        eudaq::RawDataEvent bore(eudaq::RawDataEvent::BORE(EVENT_TYPE, _n_run));
         // You can set tags on the BORE that will be saved in the data file
         // and can be used later to help decoding
-        bore.SetTag("ubcm", eudaq::to_string(m_ubcmConfParam));
-        // Starting your hardware
-        hardware.PrepareForRun();
+        // bore.SetTag("ubcm", eudaq::to_string(m_ubcmConfParam));
+        // Starting your ubcm
+
+        // ---------- start your ubcm here ----------
+
+
+
+
+
+
+
+
+
         // Send the event to the Data Collector
         SendEvent(bore);
 
@@ -131,16 +206,15 @@ class ubcmProducer : public eudaq::Producer {
     virtual void OnStopRun() {
       try {
         // Set a flag to signal to the polling loop that the run is over and it is in the stopping process
-        stopping = true;
+        _stopping = true;
 
-        // wait until all events have been read out from the hardware
-        while (stopping) {
+        // wait until all events have been read out from the ubcm
+        while (_stopping) {
           eudaq::mSleep(20);
-          //std::cout<<"Does hardware have pending? "<<hardware.EventsPending()<<"\n";
         }
         // Send an EORE after all the real events have been sent
         // You can also set tags on it (as with the BORE) if necessary
-        SendEvent(eudaq::RawDataEvent::EORE("Test", m_run, ++m_ev));
+        SendEvent(eudaq::RawDataEvent::EORE(EVENT_TYPE, _n_run, ++_n_ev));
         
         // At the end, set the ConnectionState that will be displayed in the Run Control.
         // Due to the definition of FSM, it should go to STATE_CONF. 
@@ -158,65 +232,48 @@ class ubcmProducer : public eudaq::Producer {
     // we should also exit.
     virtual void OnTerminate() {
       std::cout << "Terminating..." << std::endl;
-      done = true;
+      _done = true;
     }
 
     // This loop is running in the main
-    // This is just an ubcm, adapt it to your hardware
     void ReadoutLoop() {
       try {
         // Loop until Run Control tells us to terminate using the done flag
-        while (!done) {
-          if (!hardware.EventsPending()) {
-            // No events are pending, so check if the run is stopping
-            if (stopping) {
-              // if so, signal that there are no events left
-              stopping = false;
+        while (!_done) {
+
+          if (_n_ev< _conf_maxNumberOfEvents) {
+
+            if (GetConnectionState() != eudaq::ConnectionState::STATE_RUNNING) {
+              // Now sleep for a bit, to prevent chewing up all the CPU
+              eudaq::mSleep(20);
+              // Then restart the loop
+              continue;
             }
-            // Now sleep for a bit, to prevent chewing up all the CPU
-            eudaq::mSleep(20);
-            // Then restart the loop
-            continue;
+
+            // If we get here, there must be data to read out
+            // Create a RawDataEvent to contain the event data to be sent
+            eudaq::RawDataEvent ev(EVENT_TYPE, _n_run, _n_ev);
+
+            for (unsigned itarget = 0; itarget < _targets.size(); ++itarget) {
+              auto target = _targets.at(itarget);
+              auto raw = target->read_raw_data( std::chrono::milliseconds( 100 ) );
+              if ( !raw ) continue;
+              std::cerr << "Trg#, " << raw->external_trigger_counter << ", TLU#, " << raw->external_trigger_data << '\n';
+          
+              for (unsigned ichannel = 0; ichannel < 4; ++ichannel) {
+                std::vector<unsigned char> buffer = {0,1,2,3,4,5,6,7,7,8,9};
+                // std::vector<unsigned char> buffer = raw->data[ichannel].data();
+                ev.AddBlock(4*itarget+ichannel, buffer);
+              }
+            }
+
+
+            // Send the event to the Data Collector      
+            SendEvent(ev);
+            // Now increment the event number
+            _n_ev++;
+            eudaq::mSleep(1000);
           }
-          // If the Producer is not in STATE_RUNNING, it will restart the loop
-          if (GetConnectionState() != eudaq::ConnectionState::STATE_RUNNING) {
-            // Now sleep for a bit, to prevent chewing up all the CPU
-            eudaq::mSleep(20);
-            // Then restart the loop
-            continue;
-          }
-          // // If we get here, there must be data to read out
-          // // Create a RawDataEvent to contain the event data to be sent
-          // eudaq::RawDataEvent ev(EVENT_TYPE, m_run, m_ev);
-          // for (unsigned plane = 0; plane < hardware.NumSensors(); ++plane) {
-          //   // Read out a block of raw data from the hardware
-          //   std::vector<unsigned char> buffer = hardware.ReadSensor(plane);
-          //   // Each data block has an ID that is used for ordering the planes later
-          //   // If there are multiple sensors, they should be numbered incrementally
-
-          //   // Add the block of raw data to the event
-          //   ev.AddBlock(plane, buffer);
-          // }
-
-          // If we get here, there must be data to read out
-          // Create a RawDataEvent to contain the event data to be sent
-          eudaq::RawDataEvent ev(EVENT_TYPE, m_run, m_ev);
-          for (unsigned ichannel = 0; ichannel < 4; ++ichannel) {
-            // Read out a block of raw data from the hardware
-            std::vector<unsigned char> buffer = {0,1,2,3,4,5,6,7,8,9};
-            // Each data block has an ID that is used for ordering the planes later
-            // If there are multiple sensors, they should be numbered incrementally
-
-            // Add the block of raw data to the event
-            ev.AddBlock(ichannel, buffer);
-          }
-
-          hardware.CompletedEvent();
-
-          // Send the event to the Data Collector      
-          SendEvent(ev);
-          // Now increment the event number
-          m_ev++;
         } 
       }
       catch (...) {
@@ -225,14 +282,23 @@ class ubcmProducer : public eudaq::Producer {
         SetConnectionState(eudaq::ConnectionState::STATE_ERROR, "Error during running");
       }
     }
+  public:
+    std::vector<utca::uBCM*> _targets;
 
   private:
-    // This is just a dummy class representing the hardware
-    // It here basically that the ubcm code will compile
-    // but it also generates ubcm raw data to help illustrate the decoder
-    eudaq::ExampleHardware hardware;
-    unsigned m_run, m_ev, m_ubcmConfParam, m_ubcmInitParam;
-    bool stopping, done;
+    unsigned _n_run, _n_ev;
+    bool _stopping, _done;
+
+    // ---------- init paramters ----------
+    unsigned _init_parameter;
+
+    // ---------- conf paramters ----------
+    int _conf_maxNumberOfEvents;
+
+    std::string _conf_targetString;
+    std::string _conf_connectionsRARP;
+
+
 };
 
 // The main function that will create a Producer instance and run it
@@ -265,3 +331,14 @@ int main(int /*argc*/, const char ** argv) {
   }
   return 0;
 }
+
+
+
+
+//EUDAQ_DEBUG("Debug Message to the LogCollector from ubcmProducer");
+//EUDAQ_EXTRA("Extra Message to the LogCollector from ubcmProducer");
+//EUDAQ_INFO("Info Message to the LogCollector from ubcmProducer");
+//EUDAQ_WARN("Warn Message to the LogCollector from ubcmProducer");
+//EUDAQ_ERROR("Error Message to the LogCollector from ubcmProducer");
+//EUDAQ_USER("User Message to the LogCollector from ubcmProducer");
+//EUDAQ_THROW("User Message to the LogCollector from ubcmProducer");
