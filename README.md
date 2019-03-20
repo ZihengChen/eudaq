@@ -1,4 +1,4 @@
-EUDAQ version 1
+EUDAQ version 1.9.1 for uBCM
 =======
 
 [![Build Status](https://travis-ci.org/eudaq/eudaq.svg?branch=v1.x-dev)](https://travis-ci.org/eudaq/eudaq) 
